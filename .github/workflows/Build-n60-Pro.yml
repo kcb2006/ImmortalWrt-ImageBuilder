@@ -1,0 +1,97 @@
+name: Build N60 Pro 全能固件
+on:
+  workflow_dispatch:
+    inputs:
+      custom_router_ip:
+        description: "路由器管理地址"
+        required: true
+        default: "192.168.6.1"
+      include_docker:
+        description: "开启Docker环境"
+        required: true
+        default: 'yes'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      enable_pppoe:
+        description: "预设宽带拨号"
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      pppoe_account:
+        description: "宽带账号"
+        required: false
+      pppoe_password:
+        description: "宽带密码"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      platform: mediatek/filogic
+      EXTRA_PACKAGES: >
+        docker dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn
+        luci-app-openclash luci-compat
+        luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server
+        luci-app-cloudflared cloudflared
+        luci-app-tailscale tailscale luci-i18n-tailscale-zh-cn
+        luci-app-store luci-i18n-store-zh-cn
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set executable permissions
+        run: chmod +x ${{ github.workspace }}/mediatek-filogic/build25.sh
+
+      - name: Save Custom Router IP
+        run: |
+          mkdir -p "${{ github.workspace }}/custom"
+          echo "${{ github.event.inputs.custom_router_ip }}" > "${{ github.workspace }}/custom/custom_router_ip.txt"
+
+      - name: Validate PPPoE Inputs
+        run: |
+          if [[ "${{ inputs.enable_pppoe }}" == "yes" ]]; then
+            if [[ -z "${{ inputs.pppoe_account }}" || -z "${{ inputs.pppoe_password }}" ]]; then
+              echo "Error: 请填写完整宽带账号密码"
+              exit 1
+            fi
+          fi
+
+      - name: Build Firmware
+        run: |
+          profile="netcore_n60-pro"
+          include_docker="${{ github.event.inputs.include_docker }}"
+          tag=mediatek-filogic-openwrt-25.12.0-rc2
+
+          docker run --rm -i \
+            --user root \
+            -v "${{ github.workspace }}/bin:/home/build/immortalwrt/bin" \
+            -v "${{ github.workspace }}/glinet:/home/build/immortalwrt/files/etc/uci-defaults" \
+            -v "${{ github.workspace }}/custom:/home/build/immortalwrt/files/etc/config" \
+            -v "${{ github.workspace }}/shell:/home/build/immortalwrt/shell" \
+            -v "${{ github.workspace }}/mediatek-filogic/build25.sh:/home/build/immortalwrt/build.sh" \
+            -e PROFILE=$profile \
+            -e INCLUDE_DOCKER=$include_docker \
+            -e ENABLE_PPPOE=${{ inputs.enable_pppoe }} \
+            -e PPPOE_ACCOUNT=${{ inputs.pppoe_account }} \
+            -e PPPOE_PASSWORD=${{ inputs.pppoe_password }} \
+            -e EXTRA_PACKAGES="${{ env.EXTRA_PACKAGES }}" \
+          immortalwrt/imagebuilder:$tag /bin/bash /home/build/immortalwrt/build.sh
+
+      - name: Upload Firmware
+        uses: softprops/gh-release@v2.2.1
+        with:
+          tag_name: netcore_n60-pro
+          name: N60 Pro 全能固件
+          body: "内置：iStore+Docker+OpenClash+SMB4+Cloudflared+Tailscale"
+          files: ${{ github.workspace }}/bin/targets/mediatek/filogic/*
+          token: ${{ secrets.GITHUB_TOKEN }}
