@@ -36,7 +36,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     env:
-      platform: mediatek/filogic
+      platform: "mediatek/filogic"
       EXTRA_PACKAGES: >
         docker dockerd luci-app-dockerman luci-i18n-dockerman-zh-cn
         luci-app-openclash luci-compat
@@ -87,8 +87,8 @@ jobs:
             -e EXTRA_PACKAGES="${{ env.EXTRA_PACKAGES }}" \
           immortalwrt/imagebuilder:$tag /bin/bash /home/build/immortalwrt/build.sh
 
-      - name: Upload Firmware
-        uses: softprops/gh-release@v2.2.1
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: netcore_n60-pro
           name: N60 Pro 全能固件
